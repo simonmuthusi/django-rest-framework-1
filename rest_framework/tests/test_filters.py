@@ -49,11 +49,6 @@ if django_filters:
             model = BasicModel
             fields = ['text']
 
-    class IncorrectlyConfiguredRootView(generics.ListCreateAPIView):
-        model = FilterableItem
-        filter_class = MisconfiguredFilter
-        filter_backends = (filters.DjangoFilterBackend,)
-
     class FilterClassDetailView(generics.RetrieveAPIView):
         model = FilterableItem
         filter_class = SeveralFieldsFilter
@@ -215,16 +210,6 @@ class IntegrationTestFiltering(CommonFilteringTestCase):
         expected_data = [f for f in self.data if f['date'] > search_date and
                          f['decimal'] < search_decimal]
         self.assertEqual(response.data, expected_data)
-
-    @unittest.skipUnless(django_filters, 'django-filter not installed')
-    def test_incorrectly_configured_filter(self):
-        """
-        An error should be displayed when the filter class is misconfigured.
-        """
-        view = IncorrectlyConfiguredRootView.as_view()
-
-        request = factory.get('/')
-        self.assertRaises(AssertionError, view, request)
 
     @unittest.skipUnless(django_filters, 'django-filter not installed')
     def test_unknown_filter(self):
