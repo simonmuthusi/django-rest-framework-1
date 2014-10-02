@@ -196,9 +196,21 @@ class Request(object):
         """
         Returns an object that may be used to stream the request content.
         """
-        if not _hasattr(self, '_stream'):
-            self._load_stream()
-        return self._stream
+        try:
+            content_length = int(
+                self.META.get(
+                    'CONTENT_LENGTH', self.META.get('HTTP_CONTENT_LENGTH')
+                )
+            )
+        except (ValueError, TypeError):
+            content_length = 0
+
+        if content_length == 0:
+            return None
+        elif hasattr(self._request, 'read'):
+            return self._request
+        else:
+            return BytesIO(self.raw_post_data)
 
     @property
     def query_params(self):
@@ -321,26 +333,6 @@ class Request(object):
             # Allow X-HTTP-METHOD-OVERRIDE header
             if 'HTTP_X_HTTP_METHOD_OVERRIDE' in self.META:
                 self._method = self.META['HTTP_X_HTTP_METHOD_OVERRIDE'].upper()
-
-    def _load_stream(self):
-        """
-        Return the content body of the request, as a stream.
-        """
-        try:
-            content_length = int(
-                self.META.get(
-                    'CONTENT_LENGTH', self.META.get('HTTP_CONTENT_LENGTH')
-                )
-            )
-        except (ValueError, TypeError):
-            content_length = 0
-
-        if content_length == 0:
-            self._stream = None
-        elif hasattr(self._request, 'read'):
-            self._stream = self._request
-        else:
-            self._stream = BytesIO(self.raw_post_data)
 
     def _perform_form_overloading(self):
         """
