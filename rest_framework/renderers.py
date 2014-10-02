@@ -8,18 +8,17 @@ REST framework also provides an HTML renderer the renders the browsable API.
 """
 from __future__ import unicode_literals
 
-import copy
 import json
+import django
 from django import forms
 from django.core.exceptions import ImproperlyConfigured
 from django.http.multipartparser import parse_header
 from django.template import RequestContext, loader, Template
 from django.test.client import encode_multipart
+from django.utils import six
 from django.utils.xmlutils import SimplerXMLGenerator
-from rest_framework.compat import StringIO
-from rest_framework.compat import six
-from rest_framework.compat import smart_text
-from rest_framework.compat import yaml
+from rest_framework.compat import StringIO, smart_text, yaml
+from rest_framework.exceptions import ParseError
 from rest_framework.settings import api_settings
 from rest_framework.request import is_form_media_type, override_method
 from rest_framework.utils import encoders
@@ -52,35 +51,41 @@ class JSONRenderer(BaseRenderer):
     format = 'json'
     encoder_class = encoders.JSONEncoder
     ensure_ascii = True
-    charset = None
-    # JSON is a binary encoding, that can be encoded as utf-8, utf-16 or utf-32.
+
+    # We don't set a charset because JSON is a binary encoding,
+    # that can be encoded as utf-8, utf-16 or utf-32.
     # See: http://www.ietf.org/rfc/rfc4627.txt
     # Also: http://lucumr.pocoo.org/2013/7/19/application-mimetypes-and-encodings/
+    charset = None
 
-    def render(self, data, accepted_media_type=None, renderer_context=None):
-        """
-        Render `data` into JSON.
-        """
-        if data is None:
-            return bytes()
-
-        # If 'indent' is provided in the context, then pretty print the result.
-        # E.g. If we're being called by the BrowsableAPIRenderer.
-        renderer_context = renderer_context or {}
-        indent = renderer_context.get('indent', None)
-
+    def get_indent(self, accepted_media_type, renderer_context):
         if accepted_media_type:
             # If the media type looks like 'application/json; indent=4',
             # then pretty print the result.
             base_media_type, params = parse_header(accepted_media_type.encode('ascii'))
-            indent = params.get('indent', indent)
             try:
-                indent = max(min(int(indent), 8), 0)
-            except (ValueError, TypeError):
-                indent = None
+                return max(min(int(params['indent']), 8), 0)
+            except (KeyError, ValueError, TypeError):
+                pass
 
-        ret = json.dumps(data, cls=self.encoder_class,
-            indent=indent, ensure_ascii=self.ensure_ascii)
+        # If 'indent' is provided in the context, then pretty print the result.
+        # E.g. If we're being called by the BrowsableAPIRenderer.
+        return renderer_context.get('indent', None)
+
+    def render(self, data, accepted_media_type=None, renderer_context=None):
+        """
+        Render `data` into JSON, returning a bytestring.
+        """
+        if data is None:
+            return bytes()
+
+        renderer_context = renderer_context or {}
+        indent = self.get_indent(accepted_media_type, renderer_context)
+
+        ret = json.dumps(
+            data, cls=self.encoder_class,
+            indent=indent, ensure_ascii=self.ensure_ascii
+        )
 
         # On python 2.x json.dumps() returns bytestrings if ensure_ascii=True,
         # but if ensure_ascii=False, the return type is underspecified,
@@ -144,7 +149,7 @@ class XMLRenderer(BaseRenderer):
 
     def render(self, data, accepted_media_type=None, renderer_context=None):
         """
-        Renders *obj* into serialized XML.
+        Renders `data` into serialized XML.
         """
         if data is None:
             return ''
@@ -191,17 +196,26 @@ class YAMLRenderer(BaseRenderer):
     format = 'yaml'
     encoder = encoders.SafeDumper
     charset = 'utf-8'
+    ensure_ascii = True
 
     def render(self, data, accepted_media_type=None, renderer_context=None):
         """
-        Renders *obj* into serialized YAML.
+        Renders `data` into serialized YAML.
         """
         assert yaml, 'YAMLRenderer requires pyyaml to be installed'
 
         if data is None:
             return ''
 
-        return yaml.dump(data, stream=None, encoding=self.charset, Dumper=self.encoder)
+        return yaml.dump(data, stream=None, encoding=self.charset, Dumper=self.encoder, allow_unicode=not self.ensure_ascii)
+
+
+class UnicodeYAMLRenderer(YAMLRenderer):
+    """
+    Renderer which serializes to YAML.
+    Does *not* apply character escaping for non-ascii characters.
+    """
+    ensure_ascii = False
 
 
 class TemplateHTMLRenderer(BaseRenderer):
@@ -336,71 +350,15 @@ class HTMLFormRenderer(BaseRenderer):
     template = 'rest_framework/form.html'
     charset = 'utf-8'
 
-    def data_to_form_fields(self, data):
-        fields = {}
-        for key, val in data.fields.items():
-            if getattr(val, 'read_only', True):
-                # Don't include read-only fields.
-                continue
-
-            if getattr(val, 'fields', None):
-                # Nested data not supported by HTML forms.
-                continue
-
-            kwargs = {}
-            kwargs['required'] = val.required
-
-            #if getattr(v, 'queryset', None):
-            #    kwargs['queryset'] = v.queryset
-
-            if getattr(val, 'choices', None) is not None:
-                kwargs['choices'] = val.choices
-
-            if getattr(val, 'regex', None) is not None:
-                kwargs['regex'] = val.regex
-
-            if getattr(val, 'widget', None):
-                widget = copy.deepcopy(val.widget)
-                kwargs['widget'] = widget
-
-            if getattr(val, 'default', None) is not None:
-                kwargs['initial'] = val.default
-
-            if getattr(val, 'label', None) is not None:
-                kwargs['label'] = val.label
-
-            if getattr(val, 'help_text', None) is not None:
-                kwargs['help_text'] = val.help_text
-
-            fields[key] = val.form_field_class(**kwargs)
-
-        return fields
-
     def render(self, data, accepted_media_type=None, renderer_context=None):
         """
         Render serializer data and return an HTML form, as a string.
         """
-        # The HTMLFormRenderer currently uses something of a hack to render
-        # the content, by translating each of the serializer fields into
-        # an html form field, creating a dynamic form using those fields,
-        # and then rendering that form.
-
-        # This isn't strictly neccessary, as we could render the serilizer
-        # fields to HTML directly.  The implementation is historical and will
-        # likely change at some point.
-
-        self.renderer_context = renderer_context or {}
-        request = self.renderer_context['request']
-
-        # Creating an on the fly form see:
-        # http://stackoverflow.com/questions/3915024/dynamically-creating-classes-python
-        fields = self.data_to_form_fields(data)
-        DynamicForm = type(str('DynamicForm'), (forms.Form,), fields)
-        data = None if data.empty else data
+        renderer_context = renderer_context or {}
+        request = renderer_context['request']
 
         template = loader.get_template(self.template)
-        context = RequestContext(request, {'form': DynamicForm(data)})
-
+        context = RequestContext(request, {'form': data})
         return template.render(context)
 
 
@@ -454,7 +412,7 @@ class BrowsableAPIRenderer(BaseRenderer):
         """
         Returns True if a form should be shown for this method.
         """
-        if not method in view.allowed_methods:
+        if method not in view.allowed_methods:
             return  # Not a valid method
 
         if not api_settings.FORM_METHOD_OVERRIDE:
@@ -475,6 +433,17 @@ class BrowsableAPIRenderer(BaseRenderer):
 
         In the absence of the View having an associated form then return None.
         """
+        if request.method == method:
+            try:
+                data = request.DATA
+                files = request.FILES
+            except ParseError:
+                data = None
+                files = None
+        else:
+            data = None
+            files = None
+
         with override_method(view, request, method) as request:
             obj = getattr(view, 'object', None)
             if not self.show_form_for_method(view, method, request, obj):
@@ -483,13 +452,16 @@ class BrowsableAPIRenderer(BaseRenderer):
             if method in ('DELETE', 'OPTIONS'):
                 return True  # Don't actually need to return a form
 
-            if (not getattr(view, 'get_serializer', None)
-                or not any(is_form_media_type(parser.media_type) for parser in view.parser_classes)):
+            if (
+                not getattr(view, 'get_serializer', None)
+                or not any(is_form_media_type(parser.media_type) for parser in view.parser_classes)
+            ):
                 return
 
-            serializer = view.get_serializer(instance=obj)
-
+            serializer = view.get_serializer(instance=obj, data=data, files=files)
+            serializer.is_valid()
             data = serializer.data
+
             form_renderer = self.form_renderer_class()
             return form_renderer.render(data, self.accepted_media_type, self.renderer_context)
 
@@ -581,9 +553,18 @@ class BrowsableAPIRenderer(BaseRenderer):
 
         renderer = self.get_default_renderer(view)
 
+        raw_data_post_form = self.get_raw_data_form(view, 'POST', request)
         raw_data_put_form = self.get_raw_data_form(view, 'PUT', request)
         raw_data_patch_form = self.get_raw_data_form(view, 'PATCH', request)
         raw_data_put_or_patch_form = raw_data_put_form or raw_data_patch_form
+
+        response_headers = dict(response.items())
+        renderer_content_type = ''
+        if renderer:
+            renderer_content_type = '%s' % renderer.media_type
+            if renderer.charset:
+                renderer_content_type += ' ;%s' % renderer.charset
+        response_headers['Content-Type'] = renderer_content_type
 
         context = {
             'content': self.get_content(renderer, data, accepted_media_type, renderer_context),
@@ -595,16 +576,16 @@ class BrowsableAPIRenderer(BaseRenderer):
             'version': VERSION,
             'breadcrumblist': self.get_breadcrumbs(request),
             'allowed_methods': view.allowed_methods,
-            'available_formats': [renderer.format for renderer in view.renderer_classes],
+            'available_formats': [renderer_cls.format for renderer_cls in view.renderer_classes],
+            'response_headers': response_headers,
 
             'put_form': self.get_rendered_html_form(view, 'PUT', request),
             'post_form': self.get_rendered_html_form(view, 'POST', request),
-            'patch_form': self.get_rendered_html_form(view, 'PATCH', request),
             'delete_form': self.get_rendered_html_form(view, 'DELETE', request),
             'options_form': self.get_rendered_html_form(view, 'OPTIONS', request),
 
             'raw_data_put_form': raw_data_put_form,
-            'raw_data_post_form': self.get_raw_data_form(view, 'POST', request),
+            'raw_data_post_form': raw_data_post_form,
             'raw_data_patch_form': raw_data_patch_form,
             'raw_data_put_or_patch_form': raw_data_put_or_patch_form,
 
@@ -640,8 +621,7 @@ class MultiPartRenderer(BaseRenderer):
     media_type = 'multipart/form-data; boundary=BoUnDaRyStRiNg'
     format = 'multipart'
     charset = 'utf-8'
-    BOUNDARY = 'BoUnDaRyStRiNg'
+    BOUNDARY = 'BoUnDaRyStRiNg' if django.VERSION >= (1, 5) else b'BoUnDaRyStRiNg'
 
     def render(self, data, accepted_media_type=None, renderer_context=None):
         return encode_multipart(self.BOUNDARY, data)
-

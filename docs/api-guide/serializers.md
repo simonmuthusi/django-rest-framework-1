@@ -67,6 +67,21 @@ At this point we've translated the model instance into Python native datatypes. 
     json
     # '{"email": "leila@example.com", "content": "foo bar", "created": "2012-08-22T16:20:09.822"}'
 
+### Customizing field representation
+
+Sometimes when serializing objects, you may not want to represent everything exactly the way it is in your model.
+
+If you need to customize the serialized value of a particular field, you can do this by creating a `transform_<fieldname>` method. For example if you needed to render some markdown from a text field:
+
+    description = serializers.CharField()
+    description_html = serializers.CharField(source='description', read_only=True)
+
+    def transform_description_html(self, obj, value):
+        from django.contrib.markup.templatetags.markup import markdown
+        return markdown(value)
+
+These methods are essentially the reverse of `validate_<fieldname>` (see *Validation* below.)
+
 ## Deserializing objects
         
 Deserialization is similar.  First we parse a stream into Python native datatypes... 
@@ -88,11 +103,11 @@ Deserialization is similar.  First we parse a stream into Python native datatype
 When deserializing data, we can either create a new instance, or update an existing instance.
 
     serializer = CommentSerializer(data=data)           # Create new instance
-    serializer = CommentSerializer(comment, data=data)  # Update `instance`
+    serializer = CommentSerializer(comment, data=data)  # Update `comment`
 
 By default, serializers must be passed values for all required fields or they will throw validation errors.  You can use the `partial` argument in order to allow partial updates.
 
-    serializer = CommentSerializer(comment, data={'content': u'foo bar'}, partial=True)  # Update `instance` with partial data
+    serializer = CommentSerializer(comment, data={'content': u'foo bar'}, partial=True)  # Update `comment` with partial data
 
 ## Validation
 
@@ -146,7 +161,7 @@ To do any other validation that requires access to multiple fields, add a method
             """
             Check that the start is before the stop.
             """
-            if attrs['start'] < attrs['finish']:
+            if attrs['start'] > attrs['finish']:
                 raise serializers.ValidationError("finish must occur after start")
             return attrs
 
@@ -193,7 +208,7 @@ Similarly if a nested representation should be a list of items, you should pass 
 
 Validation of nested objects will work the same as before.  Errors with nested objects will be nested under the field name of the nested object.
 
-    serializer = CommentSerializer(comment, data={'user': {'email': 'foobar', 'username': 'doe'}, 'content': 'baz'})
+    serializer = CommentSerializer(data={'user': {'email': 'foobar', 'username': 'doe'}, 'content': 'baz'})
     serializer.is_valid()
     # False
     serializer.errors
@@ -358,6 +373,25 @@ You may wish to specify multiple fields as read-only.  Instead of adding each fi
 
 Model fields which have `editable=False` set, and `AutoField` fields will be set to read-only by default, and do not need to be added to the `read_only_fields` option. 
 
+## Specifying which fields should be write-only 
+
+You may wish to specify multiple fields as write-only.  Instead of adding each field explicitly with the `write_only=True` attribute, you may use the `write_only_fields` Meta option, like so:
+
+    class CreateUserSerializer(serializers.ModelSerializer):
+        class Meta:
+            model = User
+            fields = ('email', 'username', 'password')
+            write_only_fields = ('password',)  # Note: Password field is write-only
+
+        def restore_object(self, attrs, instance=None):
+            """
+            Instantiate a new User instance.
+            """
+            assert instance is None, 'Cannot update users with CreateUserSerializer'                                
+            user = User(email=attrs['email'], username=attrs['username'])
+            user.set_password(attrs['password'])
+            return user
+ 
 ## Specifying fields explicitly 
 
 You can add extra fields to a `ModelSerializer` or override the default fields by declaring fields on the class, just as you would for a `Serializer` class.
@@ -410,7 +444,7 @@ You can change the field that is used for object lookups by setting the `lookup_
             fields = ('url', 'account_name', 'users', 'created')
             lookup_field = 'slug'
 
-Not that the `lookup_field` will be used as the default on *all* hyperlinked fields, including both the URL identity, and any hyperlinked relationships.
+Note that the `lookup_field` will be used as the default on *all* hyperlinked fields, including both the URL identity, and any hyperlinked relationships.
 
 For more specific requirements such as specifying a different lookup for each field, you'll want to set the fields on the serializer explicitly.  For example:
 
@@ -429,6 +463,29 @@ For more specific requirements such as specifying a different lookup for each fi
         class Meta:
             model = Account
             fields = ('url', 'account_name', 'users', 'created')
+
+## Overriding the URL field behavior
+
+The name of the URL field defaults to 'url'.  You can override this globally, by using the `URL_FIELD_NAME` setting.
+
+You can also override this on a per-serializer basis by using the `url_field_name` option on the serializer, like so:
+
+    class AccountSerializer(serializers.HyperlinkedModelSerializer):
+        class Meta:
+            model = Account
+            fields = ('account_url', 'account_name', 'users', 'created')
+            url_field_name = 'account_url'
+
+**Note**: The generic view implementations normally generate a `Location` header in response to successful `POST` requests.  Serializers using `url_field_name` option will not have this header automatically included by the view.  If you need to do so you will ned to also override the view's `get_success_headers()` method.
+
+You can also override the URL field's view name and lookup field without overriding the field explicitly, by using the `view_name` and `lookup_field` options, like so:
+
+    class AccountSerializer(serializers.HyperlinkedModelSerializer):
+        class Meta:
+            model = Account
+            fields = ('account_url', 'account_name', 'users', 'created')
+            view_name = 'account_detail'
+            lookup_field='account_name'
 
 ---
 
@@ -523,7 +580,27 @@ The following custom model serializer could be used as a base class for model se
         def get_pk_field(self, model_field):
             return None
 
+---
 
+# Third party packages
+
+The following third party packages are also available.
+
+## MongoengineModelSerializer
+
+The [django-rest-framework-mongoengine][mongoengine] package provides a `MongoEngineModelSerializer` serializer class that supports using MongoDB as the storage layer for Django REST framework.
+
+## GeoFeatureModelSerializer
+
+The [django-rest-framework-gis][django-rest-framework-gis] package provides a `GeoFeatureModelSerializer` serializer class that supports GeoJSON both for read and write operations.
+
+## HStoreSerializer
+
+The [django-rest-framework-hstore][django-rest-framework-hstore] package provides an `HStoreSerializer` to support [django-hstore][django-hstore] `DictionaryField` model field and its `schema-mode` feature.
 
 [cite]: https://groups.google.com/d/topic/django-users/sVFaOfQi4wY/discussion
 [relations]: relations.md
+[mongoengine]: https://github.com/umutbozkurt/django-rest-framework-mongoengine
+[django-rest-framework-gis]: https://github.com/djangonauts/django-rest-framework-gis
+[django-rest-framework-hstore]: https://github.com/djangonauts/django-rest-framework-hstore
+[django-hstore]: https://github.com/djangonauts/django-hstore

@@ -4,6 +4,7 @@
     <meta charset="utf-8">
     <title>{{ title }}</title>
     <link href="{{ base_url }}/img/favicon.ico" rel="icon" type="image/x-icon">
+    <link rel="canonical" href="{{ canonical_url }}"/>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="{{ description }}">
     <meta name="author" content="Tom Christie">
@@ -32,6 +33,21 @@
   })();
 
     </script>
+    <style>
+span.fusion-wrap a {
+  display: block;
+  margin-top: 10px;
+  color: black;
+}
+
+a.fusion-poweredby {
+  display: block;
+  margin-top: 10px;
+}
+@media (max-width: 767px) {
+  div.promo {display: none;}
+}
+</style>
   </head>
   <body onload="prettyPrint()" class="{{ page_id }}-page">
 
@@ -101,9 +117,13 @@
                   <li><a href="{{ base_url }}/topics/browser-enhancements{{ suffix }}">Browser enhancements</a></li>
                   <li><a href="{{ base_url }}/topics/browsable-api{{ suffix }}">The Browsable API</a></li>
                   <li><a href="{{ base_url }}/topics/rest-hypermedia-hateoas{{ suffix }}">REST, Hypermedia & HATEOAS</a></li>
+                  <li><a href="{{ base_url }}/topics/third-party-resources{{ suffix }}">Third Party Resources</a></li>
+                  <li><a href="{{ base_url }}/topics/contributing{{ suffix }}">Contributing to REST framework</a></li>
                   <li><a href="{{ base_url }}/topics/rest-framework-2-announcement{{ suffix }}">2.0 Announcement</a></li>
                   <li><a href="{{ base_url }}/topics/2.2-announcement{{ suffix }}">2.2 Announcement</a></li>
                   <li><a href="{{ base_url }}/topics/2.3-announcement{{ suffix }}">2.3 Announcement</a></li>
+                  <li><a href="{{ base_url }}/topics/2.4-announcement{{ suffix }}">2.4 Announcement</a></li>
+                  <li><a href="{{ base_url }}/topics/kickstarter-announcement{{ suffix }}">Kickstarter Announcement</a></li>
                   <li><a href="{{ base_url }}/topics/release-notes{{ suffix }}">Release Notes</a></li>
                   <li><a href="{{ base_url }}/topics/credits{{ suffix }}">Credits</a></li>
                 </ul>
@@ -167,7 +187,11 @@
             <div id="table-of-contents">
               <ul class="nav nav-list side-nav well sidebar-nav-fixed">
                 {{ toc }}
-              </ul>
+              <div class="promo">
+              {{ ad_block }}
+              </div>
+</ul>
+
             </div>
           </div>
 
@@ -191,6 +215,7 @@
     <script src="{{ base_url }}/js/jquery-1.8.1-min.js"></script>
     <script src="{{ base_url }}/js/prettify-1.0.js"></script>
     <script src="{{ base_url }}/js/bootstrap-2.1.1-min.js"></script>
+
     <script>
       //$('.side-nav').scrollspy()
       var shiftWindow = function() { scrollBy(0, -50) };

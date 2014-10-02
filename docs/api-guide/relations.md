@@ -44,7 +44,7 @@ In order to explain the various types of relational fields, we'll use a couple o
 For example, the following serializer.
  
     class AlbumSerializer(serializers.ModelSerializer):
-        tracks = RelatedField(many=True)
+        tracks = serializers.RelatedField(many=True)
         
         class Meta:
             model = Album
@@ -54,7 +54,7 @@ Would serialize to the following representation.
 
     {
         'album_name': 'Things We Lost In The Fire',
-        'artist': 'Low'
+        'artist': 'Low',
         'tracks': [
             '1: Sunflower',
             '2: Whitetail',
@@ -86,7 +86,7 @@ Would serialize to a representation like this:
 
     {
         'album_name': 'The Roots',
-        'artist': 'Undun'
+        'artist': 'Undun',
         'tracks': [
             89,
             90,
@@ -121,7 +121,7 @@ Would serialize to a representation like this:
 
     {
         'album_name': 'Graceland',
-        'artist': 'Paul Simon'
+        'artist': 'Paul Simon',
         'tracks': [
             'http://www.example.com/api/tracks/45/',
             'http://www.example.com/api/tracks/46/',
@@ -134,7 +134,7 @@ By default this field is read-write, although you can change this behavior using
 
 **Arguments**:
 
-* `view_name` - The view name that should be used as the target of the relationship.  **required**.
+* `view_name` - The view name that should be used as the target of the relationship.  If you're using [the standard router classes][routers] this wil be a string with the format `<modelname>-detail`. **required**.
 * `many` - If applied to a to-many relationship, you should set this argument to `True`.
 * `required` - If set to `False`, the field will accept values of `None` or the empty-string for nullable relationships.
 * `queryset` - By default `ModelSerializer` classes will use the default queryset for the relationship.  `Serializer` classes must either set a queryset explicitly, or set `read_only=True`.
@@ -159,7 +159,7 @@ Would serialize to a representation like this:
 
     {
         'album_name': 'Dear John',
-        'artist': 'Loney Dear'
+        'artist': 'Loney Dear',
         'tracks': [
             'Airport Surroundings',
             'Everything Turns to You',
@@ -194,7 +194,7 @@ Would serialize to a representation like this:
 
     {
         'album_name': 'The Eraser',
-        'artist': 'Thom Yorke'
+        'artist': 'Thom Yorke',
         'track_listing': 'http://www.example.com/api/track_list/12/',
     }
 
@@ -202,7 +202,7 @@ This field is always read-only.
 
 **Arguments**:
 
-* `view_name` - The view name that should be used as the target of the relationship.  **required**.
+* `view_name` - The view name that should be used as the target of the relationship.  If you're using [the standard router classes][routers] this wil be a string with the format `<model_name>-detail`.  **required**.
 * `lookup_field` - The field on the target that should be used for the lookup.  Should correspond to a URL keyword argument on the referenced view.  Default is `'pk'`.
 * `format` - If using format suffixes, hyperlinked fields will use the same format suffix for the target unless overridden by using the `format` argument.
 
@@ -234,7 +234,7 @@ Would serialize to a nested representation like this:
 
     {
         'album_name': 'The Grey Album',
-        'artist': 'Danger Mouse'
+        'artist': 'Danger Mouse',
         'tracks': [
             {'order': 1, 'title': 'Public Service Announcement'},
             {'order': 2, 'title': 'What More Can I Say'},
@@ -271,7 +271,7 @@ This custom field would then serialize to the following representation.
 
     {
         'album_name': 'Sometimes I Wish We Were an Eagle',
-        'artist': 'Bill Callahan'
+        'artist': 'Bill Callahan',
         'tracks': [
             'Track 1: Jim Cain (04:39)',
             'Track 2: Eid Ma Clack Shaw (04:19)',
@@ -442,7 +442,19 @@ In the 2.4 release, these parts of the API will be removed entirely.
 
 For more details see the [2.2 release announcement][2.2-announcement].
 
+---
+
+# Third Party Packages
+
+The following third party packages are also available.
+
+## DRF Nested Routers
+
+The [drf-nested-routers package][drf-nested-routers] provides routers and relationship fields for working with nested resources.
+
 [cite]: http://lwn.net/Articles/193245/
 [reverse-relationships]: https://docs.djangoproject.com/en/dev/topics/db/queries/#following-relationships-backward
+[routers]: http://www.django-rest-framework.org/api-guide/routers#defaultrouter
 [generic-relations]: https://docs.djangoproject.com/en/dev/ref/contrib/contenttypes/#id1
 [2.2-announcement]: ../topics/2.2-announcement.md
+[drf-nested-routers]: https://github.com/alanjds/drf-nested-routers

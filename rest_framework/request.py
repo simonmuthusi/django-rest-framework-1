@@ -42,13 +42,20 @@ class override_method(object):
         self.view = view
         self.request = request
         self.method = method
+        self.action = getattr(view, 'action', None)
 
     def __enter__(self):
         self.view.request = clone_request(self.request, self.method)
+        if self.action is not None:
+            # For viewsets we also set the `.action` attribute.
+            action_map = getattr(self.view, 'action_map', {})
+            self.view.action = action_map.get(self.method.lower())
         return self.view.request
 
     def __exit__(self, *args, **kwarg):
         self.view.request = self.request
+        if self.action is not None:
+            self.view.action = self.action
 
 
 class Empty(object):
@@ -223,7 +230,7 @@ class Request(object):
     def user(self, value):
         """
         Sets the user on the current request. This is necessary to maintain
-        compatilbility with django.contrib.auth where the user proprety is
+        compatibility with django.contrib.auth where the user property is
         set in the login and logout functions.
         """
         self._user = value
@@ -279,18 +286,20 @@ class Request(object):
         if not _hasattr(self, '_method'):
             self._method = self._request.method
 
-            if self._method == 'POST':
-                # Allow X-HTTP-METHOD-OVERRIDE header
-                self._method = self.META.get('HTTP_X_HTTP_METHOD_OVERRIDE',
-                                             self._method)
+            # Allow X-HTTP-METHOD-OVERRIDE header
+            if 'HTTP_X_HTTP_METHOD_OVERRIDE' in self.META:
+                self._method = self.META['HTTP_X_HTTP_METHOD_OVERRIDE'].upper()
 
     def _load_stream(self):
         """
         Return the content body of the request, as a stream.
         """
         try:
-            content_length = int(self.META.get('CONTENT_LENGTH',
-                                    self.META.get('HTTP_CONTENT_LENGTH')))
+            content_length = int(
+                self.META.get(
+                    'CONTENT_LENGTH', self.META.get('HTTP_CONTENT_LENGTH')
+                )
+            )
         except (ValueError, TypeError):
             content_length = 0
 
@@ -314,9 +323,11 @@ class Request(object):
         )
 
         # We only need to use form overloading on form POST requests.
-        if (not USE_FORM_OVERLOADING
+        if (
+            not USE_FORM_OVERLOADING
             or self._request.method != 'POST'
-            or not is_form_media_type(self._content_type)):
+            or not is_form_media_type(self._content_type)
+        ):
             return
 
         # At this point we're committed to parsing the request as form data.
@@ -324,17 +335,21 @@ class Request(object):
         self._files = self._request.FILES
 
         # Method overloading - change the method and remove the param from the content.
-        if (self._METHOD_PARAM and
-            self._METHOD_PARAM in self._data):
+        if (
+            self._METHOD_PARAM and
+            self._METHOD_PARAM in self._data
+        ):
             self._method = self._data[self._METHOD_PARAM].upper()
 
         # Content overloading - modify the content type, and force re-parse.
-        if (self._CONTENT_PARAM and
+        if (
+            self._CONTENT_PARAM and
             self._CONTENTTYPE_PARAM and
             self._CONTENT_PARAM in self._data and
-            self._CONTENTTYPE_PARAM in self._data):
+            self._CONTENTTYPE_PARAM in self._data
+        ):
             self._content_type = self._data[self._CONTENTTYPE_PARAM]
-            self._stream = BytesIO(self._data[self._CONTENT_PARAM].encode(HTTP_HEADER_ENCODING))
+            self._stream = BytesIO(self._data[self._CONTENT_PARAM].encode(self.parser_context['encoding']))
             self._data, self._files = (Empty, Empty)
 
     def _parse(self):
@@ -347,7 +362,7 @@ class Request(object):
         media_type = self.content_type
 
         if stream is None or media_type is None:
-            empty_data = QueryDict('', self._request._encoding)
+            empty_data = QueryDict('', encoding=self._request._encoding)
             empty_files = MultiValueDict()
             return (empty_data, empty_files)
 
@@ -356,7 +371,16 @@ class Request(object):
         if not parser:
             raise exceptions.UnsupportedMediaType(media_type)
 
-        parsed = parser.parse(stream, media_type, self.parser_context)
+        try:
+            parsed = parser.parse(stream, media_type, self.parser_context)
+        except:
+            # If we get an exception during parsing, fill in empty data and
+            # re-raise.  Ensures we don't simply repeat the error when
+            # attempting to render the browsable renderer response, or when
+            # logging the request or similar.
+            self._data = QueryDict('', encoding=self._request._encoding)
+            self._files = MultiValueDict()
+            raise
 
         # Parser classes may return the raw data, or a
         # DataAndFiles object.  Unpack the result as required.
@@ -379,7 +403,7 @@ class Request(object):
                 self._not_authenticated()
                 raise
 
-            if not user_auth_tuple is None:
+            if user_auth_tuple is not None:
                 self._authenticator = authenticator
                 self._user, self._auth = user_auth_tuple
                 return

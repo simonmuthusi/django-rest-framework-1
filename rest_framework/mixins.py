@@ -6,10 +6,12 @@ which allows mixin classes to be composed in interesting ways.
 """
 from __future__ import unicode_literals
 
+from django.core.exceptions import ValidationError
 from django.http import Http404
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.request import clone_request
+from rest_framework.settings import api_settings
 import warnings
 
 
@@ -24,14 +26,14 @@ def _get_validation_exclusions(obj, pk=None, slug_field=None, lookup_field=None)
     include = []
 
     if pk:
-        # Pending deprecation
+        # Deprecated
         pk_field = obj._meta.pk
         while pk_field.rel:
             pk_field = pk_field.rel.to._meta.pk
         include.append(pk_field.name)
 
     if slug_field:
-        # Pending deprecation
+        # Deprecated
         include.append(slug_field)
 
     if lookup_field and lookup_field != 'pk':
@@ -59,7 +61,7 @@ class CreateModelMixin(object):
 
     def get_success_headers(self, data):
         try:
-            return {'Location': data['url']}
+            return {'Location': data[api_settings.URL_FIELD_NAME]}
         except (TypeError, KeyError):
             return {}
 
@@ -77,10 +79,10 @@ class ListModelMixin(object):
         # `.allow_empty = False`, to raise 404 errors on empty querysets.
         if not self.allow_empty and not self.object_list:
             warnings.warn(
-                'The `allow_empty` parameter is due to be deprecated. '
+                'The `allow_empty` parameter is deprecated. '
                 'To use `allow_empty=False` style behavior, You should override '
                 '`get_queryset()` and explicitly raise a 404 on empty querysets.',
-                PendingDeprecationWarning
+                DeprecationWarning
             )
             class_name = self.__class__.__name__
             error_msg = self.empty_error % {'class_name': class_name}
@@ -114,25 +116,27 @@ class UpdateModelMixin(object):
         partial = kwargs.pop('partial', False)
         self.object = self.get_object_or_none()
 
-        if self.object is None:
-            created = True
-            save_kwargs = {'force_insert': True}
-            success_status_code = status.HTTP_201_CREATED
-        else:
-            created = False
-            save_kwargs = {'force_update': True}
-            success_status_code = status.HTTP_200_OK
-
         serializer = self.get_serializer(self.object, data=request.DATA,
                                          files=request.FILES, partial=partial)
 
-        if serializer.is_valid():
-            self.pre_save(serializer.object)
-            self.object = serializer.save(**save_kwargs)
-            self.post_save(self.object, created=created)
-            return Response(serializer.data, status=success_status_code)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            self.pre_save(serializer.object)
+        except ValidationError as err:
+            # full_clean on model instance may be called in pre_save,
+            # so we have to handle eventual errors.
+            return Response(err.message_dict, status=status.HTTP_400_BAD_REQUEST)
+
+        if self.object is None:
+            self.object = serializer.save(force_insert=True)
+            self.post_save(self.object, created=True)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+        self.object = serializer.save(force_update=True)
+        self.post_save(self.object, created=False)
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
     def partial_update(self, request, *args, **kwargs):
         kwargs['partial'] = True
@@ -158,7 +162,8 @@ class UpdateModelMixin(object):
         Set any attributes on the object that are implicit in the request.
         """
         # pk and/or slug attributes are implicit in the URL.
-        lookup = self.kwargs.get(self.lookup_field, None)
+        lookup_url_kwarg = self.lookup_url_kwarg or self.lookup_field
+        lookup = self.kwargs.get(lookup_url_kwarg, None)
         pk = self.kwargs.get(self.pk_url_kwarg, None)
         slug = self.kwargs.get(self.slug_url_kwarg, None)
         slug_field = slug and self.slug_field or None
@@ -185,5 +190,7 @@ class DestroyModelMixin(object):
     """
     def destroy(self, request, *args, **kwargs):
         obj = self.get_object()
+        self.pre_delete(obj)
         obj.delete()
+        self.post_delete(obj)
         return Response(status=status.HTTP_204_NO_CONTENT)

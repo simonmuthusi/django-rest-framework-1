@@ -31,6 +31,7 @@ def get_view_name(view_cls, suffix=None):
 
     return name
 
+
 def get_view_description(view_cls, html=False):
     """
     Given a view class, return a textual description to represent the view.
@@ -61,6 +62,7 @@ def exception_handler(exc):
             headers['WWW-Authenticate'] = exc.auth_header
         if getattr(exc, 'wait', None):
             headers['X-Throttle-Wait-Seconds'] = '%d' % exc.wait
+            headers['Retry-After'] = '%d' % exc.wait
 
         return Response({'detail': exc.detail},
                         status=exc.status_code,
@@ -101,7 +103,9 @@ class APIView(View):
         """
         view = super(APIView, cls).as_view(**initkwargs)
         view.cls = cls
-        return view
+        # Note: session based authentication is explicitly CSRF validated,
+        # all other authentication is CSRF exempt.
+        return csrf_exempt(view)
 
     @property
     def allowed_methods(self):
@@ -112,12 +116,12 @@ class APIView(View):
 
     @property
     def default_response_headers(self):
-        # TODO: deprecate?
-        # TODO: Only vary by accept if multiple renderers
-        return {
+        headers = {
             'Allow': ', '.join(self.allowed_methods),
-            'Vary': 'Accept'
         }
+        if len(self.renderer_classes) > 1:
+            headers['Vary'] = 'Accept'
+        return headers
 
     def http_method_not_allowed(self, request, *args, **kwargs):
         """
@@ -130,7 +134,7 @@ class APIView(View):
         """
         If request is not permitted, determine what kind of exception to raise.
         """
-        if not self.request.successful_authenticator:
+        if not request.successful_authenticator:
             raise exceptions.NotAuthenticated()
         raise exceptions.PermissionDenied()
 
@@ -154,8 +158,8 @@ class APIView(View):
         Returns a dict that is passed through to Parser.parse(),
         as the `parser_context` keyword argument.
         """
-        # Note: Additionally `request` will also be added to the context
-        #       by the Request object.
+        # Note: Additionally `request` and `encoding` will also be added
+        #       to the context by the Request object.
         return {
             'view': self,
             'args': getattr(self, 'args', ()),
@@ -294,7 +298,7 @@ class APIView(View):
 
     # Dispatch methods
 
-    def initialize_request(self, request, *args, **kargs):
+    def initialize_request(self, request, *args, **kwargs):
         """
         Returns the initial request object.
         """
@@ -369,9 +373,9 @@ class APIView(View):
         response.exception = True
         return response
 
-    # Note: session based authentication is explicitly CSRF validated,
-    # all other authentication is CSRF exempt.
-    @csrf_exempt
+    # Note: Views are made CSRF exempt from within `as_view` as to prevent
+    # accidental removal of this exemption in cases where `dispatch` needs to
+    # be overridden.
     def dispatch(self, request, *args, **kwargs):
         """
         `.dispatch()` is pretty much the same as Django's regular dispatch,

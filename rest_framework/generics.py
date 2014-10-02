@@ -25,13 +25,14 @@ def strict_positive_int(integer_string, cutoff=None):
         ret = min(ret, cutoff)
     return ret
 
-def get_object_or_404(queryset, **filter_kwargs):
+
+def get_object_or_404(queryset, *filter_args, **filter_kwargs):
     """
     Same as Django's standard shortcut, but make sure to raise 404
     if the filter_kwargs don't match the required types.
     """
     try:
-        return _get_object_or_404(queryset, **filter_kwargs)
+        return _get_object_or_404(queryset, *filter_args, **filter_kwargs)
     except (TypeError, ValueError):
         raise Http404
 
@@ -43,6 +44,10 @@ class GenericAPIView(views.APIView):
 
     # You'll need to either set these attributes,
     # or override `get_queryset()`/`get_serializer_class()`.
+    # If you are overriding a view method, it is important that you call
+    # `get_queryset()` instead of accessing the `queryset` property directly,
+    # as `queryset` will get evaluated only once, and those results are cached
+    # for all subsequent requests.
     queryset = None
     serializer_class = None
 
@@ -54,6 +59,7 @@ class GenericAPIView(views.APIView):
     # If you want to use object lookups other than pk, set this attribute.
     # For more complex lookup requirements override `get_object()`.
     lookup_field = 'pk'
+    lookup_url_kwarg = None
 
     # Pagination settings
     paginate_by = api_settings.PAGINATE_BY
@@ -89,8 +95,8 @@ class GenericAPIView(views.APIView):
             'view': self
         }
 
-    def get_serializer(self, instance=None, data=None,
-                       files=None, many=False, partial=False):
+    def get_serializer(self, instance=None, data=None, files=None, many=False,
+                       partial=False, allow_add_remove=False):
         """
         Return the serializer instance that should be used for validating and
         deserializing input, and for serializing output.
@@ -98,7 +104,9 @@ class GenericAPIView(views.APIView):
         serializer_class = self.get_serializer_class()
         context = self.get_serializer_context()
         return serializer_class(instance, data=data, files=files,
-                                many=many, partial=partial, context=context)
+                                many=many, partial=partial,
+                                allow_add_remove=allow_add_remove,
+                                context=context)
 
     def get_pagination_serializer(self, page):
         """
@@ -120,11 +128,11 @@ class GenericAPIView(views.APIView):
         deprecated_style = False
         if page_size is not None:
             warnings.warn('The `page_size` parameter to `paginate_queryset()` '
-                          'is due to be deprecated. '
+                          'is deprecated. '
                           'Note that the return style of this method is also '
                           'changed, and will simply return a page object '
                           'when called without a `page_size` argument.',
-                          PendingDeprecationWarning, stacklevel=2)
+                          DeprecationWarning, stacklevel=2)
             deprecated_style = True
         else:
             # Determine the required page size.
@@ -135,10 +143,10 @@ class GenericAPIView(views.APIView):
 
         if not self.allow_empty:
             warnings.warn(
-                'The `allow_empty` parameter is due to be deprecated. '
+                'The `allow_empty` parameter is deprecated. '
                 'To use `allow_empty=False` style behavior, You should override '
                 '`get_queryset()` and explicitly raise a 404 on empty querysets.',
-                PendingDeprecationWarning, stacklevel=2
+                DeprecationWarning, stacklevel=2
             )
 
         paginator = self.paginator_class(queryset, page_size,
@@ -147,18 +155,19 @@ class GenericAPIView(views.APIView):
         page_query_param = self.request.QUERY_PARAMS.get(self.page_kwarg)
         page = page_kwarg or page_query_param or 1
         try:
-            page_number = strict_positive_int(page)
-        except ValueError:
+            page_number = paginator.validate_number(page)
+        except InvalidPage:
             if page == 'last':
                 page_number = paginator.num_pages
             else:
                 raise Http404(_("Page is not 'last', nor can it be converted to an int."))
         try:
             page = paginator.page(page_number)
-        except InvalidPage as e:
-            raise Http404(_('Invalid page (%(page_number)s): %(message)s') % {
-                                'page_number': page_number,
-                                'message': str(e)
+        except InvalidPage as exc:
+            error_format = _('Invalid page (%(page_number)s): %(message)s')
+            raise Http404(error_format % {
+                'page_number': page_number,
+                'message': str(exc)
             })
 
         if deprecated_style:
@@ -174,24 +183,35 @@ class GenericAPIView(views.APIView):
         method if you want to apply the configured filtering backend to the
         default queryset.
         """
-        filter_backends = self.filter_backends or []
-        if not filter_backends and self.filter_backend:
-            warnings.warn(
-                'The `filter_backend` attribute and `FILTER_BACKEND` setting '
-                'are due to be deprecated in favor of a `filter_backends` '
-                'attribute and `DEFAULT_FILTER_BACKENDS` setting, that take '
-                'a *list* of filter backend classes.',
-                PendingDeprecationWarning, stacklevel=2
-            )
-            filter_backends = [self.filter_backend]
-
-        for backend in filter_backends:
+        for backend in self.get_filter_backends():
             queryset = backend().filter_queryset(self.request, queryset, self)
         return queryset
 
-    ########################
-    ### The following methods provide default implementations
-    ### that you may want to override for more complex cases.
+    def get_filter_backends(self):
+        """
+        Returns the list of filter backends that this view requires.
+        """
+        if self.filter_backends is None:
+            filter_backends = []
+        else:
+            # Note that we are returning a *copy* of the class attribute,
+            # so that it is safe for the view to mutate it if needed.
+            filter_backends = list(self.filter_backends)
+
+        if not filter_backends and self.filter_backend:
+            warnings.warn(
+                'The `filter_backend` attribute and `FILTER_BACKEND` setting '
+                'are deprecated in favor of a `filter_backends` '
+                'attribute and `DEFAULT_FILTER_BACKENDS` setting, that take '
+                'a *list* of filter backend classes.',
+                DeprecationWarning, stacklevel=2
+            )
+            filter_backends = [self.filter_backend]
+
+        return filter_backends
+
+    # The following methods provide default implementations
+    # that you may want to override for more complex cases.
 
     def get_paginate_by(self, queryset=None):
         """
@@ -204,8 +224,8 @@ class GenericAPIView(views.APIView):
         """
         if queryset is not None:
             warnings.warn('The `queryset` parameter to `get_paginate_by()` '
-                          'is due to be deprecated.',
-                          PendingDeprecationWarning, stacklevel=2)
+                          'is deprecated.',
+                          DeprecationWarning, stacklevel=2)
 
         if self.paginate_by_param:
             try:
@@ -232,6 +252,12 @@ class GenericAPIView(views.APIView):
         if serializer_class is not None:
             return serializer_class
 
+        warnings.warn(
+            'The `.model` attribute on view classes is now deprecated in favor '
+            'of the more explicit `serializer_class` and `queryset` attributes.',
+            DeprecationWarning, stacklevel=2
+        )
+
         assert self.model is not None, \
             "'%s' should either include a 'serializer_class' attribute, " \
             "or use the 'model' attribute as a shortcut for " \
@@ -249,6 +275,10 @@ class GenericAPIView(views.APIView):
         This must be an iterable, and may be a queryset.
         Defaults to using `self.queryset`.
 
+        This method should always be used rather than accessing `self.queryset`
+        directly, as `self.queryset` gets evaluated only once, and those results
+        are cached for all subsequent requests.
+
         You may want to override this if you need to provide different
         querysets depending on the incoming request.
 
@@ -258,10 +288,15 @@ class GenericAPIView(views.APIView):
             return self.queryset._clone()
 
         if self.model is not None:
+            warnings.warn(
+                'The `.model` attribute on view classes is now deprecated in favor '
+                'of the more explicit `serializer_class` and `queryset` attributes.',
+                DeprecationWarning, stacklevel=2
+            )
             return self.model._default_manager.all()
 
-        raise ImproperlyConfigured("'%s' must define 'queryset' or 'model'"
-                                    % self.__class__.__name__)
+        error_format = "'%s' must define 'queryset' or 'model'"
+        raise ImproperlyConfigured(error_format % self.__class__.__name__)
 
     def get_object(self, queryset=None):
         """
@@ -278,24 +313,26 @@ class GenericAPIView(views.APIView):
             pass  # Deprecation warning
 
         # Perform the lookup filtering.
+        # Note that `pk` and `slug` are deprecated styles of lookup filtering.
+        lookup_url_kwarg = self.lookup_url_kwarg or self.lookup_field
+        lookup = self.kwargs.get(lookup_url_kwarg, None)
         pk = self.kwargs.get(self.pk_url_kwarg, None)
         slug = self.kwargs.get(self.slug_url_kwarg, None)
-        lookup = self.kwargs.get(self.lookup_field, None)
 
         if lookup is not None:
             filter_kwargs = {self.lookup_field: lookup}
         elif pk is not None and self.lookup_field == 'pk':
             warnings.warn(
-                'The `pk_url_kwarg` attribute is due to be deprecated. '
+                'The `pk_url_kwarg` attribute is deprecated. '
                 'Use the `lookup_field` attribute instead',
-                PendingDeprecationWarning
+                DeprecationWarning
             )
             filter_kwargs = {'pk': pk}
         elif slug is not None and self.lookup_field == 'pk':
             warnings.warn(
-                'The `slug_url_kwarg` attribute is due to be deprecated. '
+                'The `slug_url_kwarg` attribute is deprecated. '
                 'Use the `lookup_field` attribute instead',
-                PendingDeprecationWarning
+                DeprecationWarning
             )
             filter_kwargs = {self.slug_field: slug}
         else:
@@ -313,12 +350,11 @@ class GenericAPIView(views.APIView):
 
         return obj
 
-    ########################
-    ### The following are placeholder methods,
-    ### and are intended to be overridden.
-    ###
-    ### The are not called by GenericAPIView directly,
-    ### but are used by the mixin methods.
+    # The following are placeholder methods,
+    # and are intended to be overridden.
+    #
+    # The are not called by GenericAPIView directly,
+    # but are used by the mixin methods.
 
     def pre_save(self, obj):
         """
@@ -332,6 +368,18 @@ class GenericAPIView(views.APIView):
     def post_save(self, obj, created=False):
         """
         Placeholder method for calling after saving an object.
+        """
+        pass
+
+    def pre_delete(self, obj):
+        """
+        Placeholder method for calling before deleting an object.
+        """
+        pass
+
+    def post_delete(self, obj):
+        """
+        Placeholder method for calling after deleting an object.
         """
         pass
 
@@ -350,10 +398,11 @@ class GenericAPIView(views.APIView):
             if method not in self.allowed_methods:
                 continue
 
-            cloned_request = clone_request(request, method)
+            original_request = self.request
+            self.request = clone_request(request, method)
             try:
                 # Test global permissions
-                self.check_permissions(cloned_request)
+                self.check_permissions(self.request)
                 # Test object permissions
                 if method == 'PUT':
                     try:
@@ -371,6 +420,8 @@ class GenericAPIView(views.APIView):
                 # appropriate metadata about the fields that should be supplied.
                 serializer = self.get_serializer()
                 actions[method] = serializer.metadata()
+            finally:
+                self.request = original_request
 
         if actions:
             ret['actions'] = actions
@@ -378,10 +429,8 @@ class GenericAPIView(views.APIView):
         return ret
 
 
-##########################################################
-### Concrete view classes that provide method handlers ###
-### by composing the mixin classes with the base view. ###
-##########################################################
+# Concrete view classes that provide method handlers
+# by composing the mixin classes with the base view.
 
 class CreateAPIView(mixins.CreateModelMixin,
                     GenericAPIView):
@@ -496,16 +545,14 @@ class RetrieveUpdateDestroyAPIView(mixins.RetrieveModelMixin,
         return self.destroy(request, *args, **kwargs)
 
 
-##########################
-### Deprecated classes ###
-##########################
+# Deprecated classes
 
 class MultipleObjectAPIView(GenericAPIView):
     def __init__(self, *args, **kwargs):
         warnings.warn(
-            'Subclassing `MultipleObjectAPIView` is due to be deprecated. '
+            'Subclassing `MultipleObjectAPIView` is deprecated. '
             'You should simply subclass `GenericAPIView` instead.',
-            PendingDeprecationWarning, stacklevel=2
+            DeprecationWarning, stacklevel=2
         )
         super(MultipleObjectAPIView, self).__init__(*args, **kwargs)
 
@@ -513,8 +560,8 @@ class MultipleObjectAPIView(GenericAPIView):
 class SingleObjectAPIView(GenericAPIView):
     def __init__(self, *args, **kwargs):
         warnings.warn(
-            'Subclassing `SingleObjectAPIView` is due to be deprecated. '
+            'Subclassing `SingleObjectAPIView` is deprecated. '
             'You should simply subclass `GenericAPIView` instead.',
-            PendingDeprecationWarning, stacklevel=2
+            DeprecationWarning, stacklevel=2
         )
         super(SingleObjectAPIView, self).__init__(*args, **kwargs)

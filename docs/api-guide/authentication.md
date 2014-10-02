@@ -93,7 +93,7 @@ Note that if deploying to [Apache using mod_wsgi][mod_wsgi_official], the author
 
 If you are deploying to Apache, and using any non-session based authentication, you will need to explicitly configure mod_wsgi to pass the required headers through to the application.  This can be done by specifying the `WSGIPassAuthorization` directive in the appropriate context and setting it to `'On'`.
 
-    # this can go in either server config, virtual host, directory or .htaccess 
+    # this can go in either server config, virtual host, directory or .htaccess
     WSGIPassAuthorization On
 
 ---
@@ -117,16 +117,22 @@ Unauthenticated responses that are denied permission will result in an `HTTP 401
 
 ## TokenAuthentication
 
-This authentication scheme uses a simple token-based HTTP Authentication scheme.  Token authentication is appropriate for client-server setups, such as native desktop and mobile clients. 
+This authentication scheme uses a simple token-based HTTP Authentication scheme.  Token authentication is appropriate for client-server setups, such as native desktop and mobile clients.
 
-To use the `TokenAuthentication` scheme, include `rest_framework.authtoken` in your `INSTALLED_APPS` setting:
+To use the `TokenAuthentication` scheme you'll need to [configure the authentication classes](#setting-the-authentication-scheme) to include `TokenAuthentication`, and additionally include `rest_framework.authtoken` in your `INSTALLED_APPS` setting:
 
     INSTALLED_APPS = (
         ...
         'rest_framework.authtoken'
     )
-    
-Make sure to run `manage.py syncdb` after changing your settings. The `authtoken` database tables are managed by south (see [Schema migrations](#schema-migrations) below).
+
+
+---
+
+**Note:** Make sure to run `manage.py syncdb` after changing your settings. The `rest_framework.authtoken` app provides both Django (from v1.7) and South database migrations. See [Schema migrations](#schema-migrations) below.
+
+---
+
 
 You'll also need to create tokens for your users.
 
@@ -162,10 +168,12 @@ The `curl` command line tool may be useful for testing token authenticated APIs.
 
 If you want every user to have an automatically generated Token, you can simply catch the User's `post_save` signal.
 
+    from django.contrib.auth import get_user_model
+    from django.db.models.signals import post_save
     from django.dispatch import receiver
     from rest_framework.authtoken.models import Token
 
-    @receiver(post_save, sender=User)
+    @receiver(post_save, sender=get_user_model())
     def create_auth_token(sender, instance=None, created=False, **kwargs):
         if created:
             Token.objects.create(user=instance)
@@ -182,9 +190,10 @@ If you've already created some users, you can generate tokens for all existing u
 
 When using `TokenAuthentication`, you may want to provide a mechanism for clients to obtain a token given the username and password.  REST framework provides a built-in view to provide this behavior.  To use it, add the `obtain_auth_token` view to your URLconf:
 
-    urlpatterns += patterns('',
-        url(r'^api-token-auth/', 'rest_framework.authtoken.views.obtain_auth_token')
-    )
+    from rest_framework.authtoken import views
+    urlpatterns += [
+        url(r'^api-token-auth/', views.obtain_auth_token)
+    ]
 
 Note that the URL part of the pattern can be whatever you want to use.
 
@@ -196,7 +205,14 @@ Note that the default `obtain_auth_token` view explicitly uses JSON requests and
 
 #### Schema migrations
 
-The `rest_framework.authtoken` app includes a south migration that will create the authtoken table.
+The `rest_framework.authtoken` app includes both Django native migrations (for Django versions >1.7) and South migrations (for Django versions <1.7) that will create the authtoken table.
+
+----
+
+**Note**: From REST Framework v2.4.0 using South with Django <1.7 requires upgrading South v1.0+
+
+----
+
 
 If you're using a [custom user model][custom-user-model] you'll need to make sure that any initial migration that creates the user table runs before the authtoken table is created.
 
@@ -207,7 +223,7 @@ You can do so by inserting a `needed_by` attribute in your user migration:
         needed_by = (
             ('authtoken', '0001_initial'),
         )
-        
+
         def forwards(self):
             ...
 
@@ -265,6 +281,12 @@ This authentication class depends on the optional [django-oauth2-provider][djang
         'provider.oauth2',
     )
 
+Then add `OAuth2Authentication` to your global `DEFAULT_AUTHENTICATION` setting:
+
+    'DEFAULT_AUTHENTICATION_CLASSES': (
+        'rest_framework.authentication.OAuth2Authentication',
+    ),
+
 You must also include the following in your root `urls.py` module:
 
     url(r'^oauth2/', include('provider.oauth2.urls', namespace='oauth2')),
@@ -274,7 +296,7 @@ Note that the `namespace='oauth2'` argument is required.
 Finally, sync your database.
 
     python manage.py syncdb
-    python manage.py migrate 
+    python manage.py migrate
 
 ---
 
@@ -360,7 +382,7 @@ The following example will authenticate any incoming request as the user given b
                 user = User.objects.get(username=username)
             except User.DoesNotExist:
                 raise exceptions.AuthenticationFailed('No such user')
-            
+
             return (user, None)
 
 ---
@@ -380,6 +402,18 @@ The [Django OAuth Toolkit][django-oauth-toolkit] package provides OAuth 2.0 supp
 ## Django OAuth2 Consumer
 
 The [Django OAuth2 Consumer][doac] library from [Rediker Software][rediker] is another package that provides [OAuth 2.0 support for REST framework][doac-rest-framework].  The package includes token scoping permissions on tokens, which allows finer-grained access to your API.
+
+## JSON Web Token Authentication
+
+JSON Web Token is a fairly new standard which can be used for token-based authentication. Unlike the built-in TokenAuthentication scheme, JWT Authentication doesn't need to use a database to validate a token. [Blimp][blimp] maintains the [djangorestframework-jwt][djangorestframework-jwt] package which provides a JWT Authentication class as well as a mechanism for clients to obtain a JWT given the username and password.
+
+## Hawk HTTP Authentication
+
+The [HawkREST][hawkrest] library builds on the [Mohawk][mohawk] library to let you work with [Hawk][hawk] signed requests and responses in your API. [Hawk][hawk] lets two parties securely communicate with each other using messages signed by a shared key. It is based on [HTTP MAC access authentication][mac] (which was based on parts of [OAuth 1.0][oauth-1.0a]).
+
+## HTTP Signature Authentication
+
+HTTP Signature (currently a [IETF draft][http-signature-ietf-draft]) provides a way to achieve origin authentication and message integrity for HTTP messages. Similar to [Amazon's HTTP Signature scheme][amazon-http-signature], used by many of its services, it permits stateless, per-request authentication. [Elvio Toccalino][etoccalino] maintains the [djangorestframework-httpsignature][djangorestframework-httpsignature] package which provides an easy to use HTTP Signature Authentication mechanism.
 
 [cite]: http://jacobian.org/writing/rest-worst-practices/
 [http401]: http://www.w3.org/Protocols/rfc2616/rfc2616-sec10.html#sec10.4.2
@@ -405,3 +439,13 @@ The [Django OAuth2 Consumer][doac] library from [Rediker Software][rediker] is a
 [doac]: https://github.com/Rediker-Software/doac
 [rediker]: https://github.com/Rediker-Software
 [doac-rest-framework]: https://github.com/Rediker-Software/doac/blob/master/docs/integrations.md#
+[blimp]: https://github.com/GetBlimp
+[djangorestframework-jwt]: https://github.com/GetBlimp/django-rest-framework-jwt
+[etoccalino]: https://github.com/etoccalino/
+[djangorestframework-httpsignature]: https://github.com/etoccalino/django-rest-framework-httpsignature
+[amazon-http-signature]: http://docs.aws.amazon.com/general/latest/gr/signature-version-4.html
+[http-signature-ietf-draft]: https://datatracker.ietf.org/doc/draft-cavage-http-signatures/
+[hawkrest]: http://hawkrest.readthedocs.org/en/latest/
+[hawk]: https://github.com/hueniverse/hawk
+[mohawk]: http://mohawk.readthedocs.org/en/latest/
+[mac]: http://tools.ietf.org/html/draft-hammer-oauth-v2-mac-token-05
