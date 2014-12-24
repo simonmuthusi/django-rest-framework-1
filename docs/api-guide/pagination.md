@@ -1,4 +1,4 @@
-<a class="github" href="pagination.py"></a>
+source: pagination.py
 
 # Pagination
 
@@ -6,7 +6,7 @@
 >
 > &mdash; [Django documentation][cite]
 
-REST framework includes a `PaginationSerializer` class that makes it easy to return paginated data in a way that can then be rendered to arbitrary media types. 
+REST framework includes a `PaginationSerializer` class that makes it easy to return paginated data in a way that can then be rendered to arbitrary media types.
 
 ## Paginating basic data
 
@@ -33,7 +33,7 @@ The `context` argument of the `PaginationSerializer` class may optionally includ
     request = RequestFactory().get('/foobar')
     serializer = PaginationSerializer(instance=page, context={'request': request})
     serializer.data
-    # {'count': 4, 'next': 'http://testserver/foobar?page=2', 'previous': None, 'results': [u'john', u'paul']}    
+    # {'count': 4, 'next': 'http://testserver/foobar?page=2', 'previous': None, 'results': [u'john', u'paul']}
 
 We could now return that data in a `Response` object, and it would be rendered into the correct media type.
 
@@ -128,7 +128,7 @@ For example, to nest a pair of links labelled 'prev' and 'next', and set the nam
 
     class CustomPaginationSerializer(pagination.BasePaginationSerializer):
         links = LinksSerializer(source='*')  # Takes the page object as the source
-        total_results = serializers.Field(source='paginator.count')
+        total_results = serializers.ReadOnlyField(source='paginator.count')
 
         results_field = 'objects'
 

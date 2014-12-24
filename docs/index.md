@@ -4,8 +4,14 @@
 <a href="https://twitter.com/share" class="twitter-share-button" data-url="django-rest-framework.org" data-text="Checking out the totally awesome Django REST framework! http://www.django-rest-framework.org" data-count="none"></a>
 <script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0];if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src="http://platform.twitter.com/widgets.js";fjs.parentNode.insertBefore(js,fjs);}}(document,"script","twitter-wjs");</script>
 
-<img src="https://secure.travis-ci.org/tomchristie/django-rest-framework.png?branch=master" class="travis-build-image">
+<img src="https://secure.travis-ci.org/tomchristie/django-rest-framework.svg?branch=master" class="travis-build-image">
 </p>
+
+---
+
+**Note**: This is the documentation for the **version 3.0** of REST framework. Documentation for [version 2.4](http://tomchristie.github.io/rest-framework-2-docs/) is also available.
+
+For more details see the [3.0 release notes][3.0-announcement].
 
 ---
 
@@ -22,15 +28,12 @@
 <img alt="Django REST Framework" title="Logo by Jake 'Sid' Smith" src="img/logo.png" width="600px" style="display: block; margin: 0 auto 0 auto">
 </p>
 
-<!--
-# Django REST framework
--->
 
 Django REST framework is a powerful and flexible toolkit that makes it easy to build Web APIs.
 
 Some reasons you might want to use REST framework:
 
-* The [Web browseable API][sandbox] is a huge usability win for your developers.
+* The [Web browsable API][sandbox] is a huge usability win for your developers.
 * [Authentication policies][authentication] including [OAuth1a][oauth1-section] and [OAuth2][oauth2-section] out of the box.
 * [Serialization][serializers] that supports both [ORM][modelserializer-section] and [non-ORM][serializer-section] data sources.
 * Customizable all the way down - just use [regular function-based views][functionview-section] if you don't need the [more][generic-views] [powerful][viewsets] [features][routers].
@@ -43,14 +46,12 @@ Some reasons you might want to use REST framework:
 
 **Above**: *Screenshot from the browsable API*
 
-----
-
 ## Requirements
 
 REST framework requires the following:
 
 * Python (2.6.5+, 2.7, 3.2, 3.3, 3.4)
-* Django (1.4.2+, 1.5, 1.6, 1.7)
+* Django (1.4.11+, 1.5.5+, 1.6, 1.7)
 
 The following packages are optional:
 
@@ -133,7 +134,7 @@ Here's our project's root `urls.py` module:
     router.register(r'users', UserViewSet)
 
     # Wire up our API using automatic URL routing.
-    # Additionally, we include login URLs for the browseable API.
+    # Additionally, we include login URLs for the browsable API.
     urlpatterns = [
         url(r'^', include(router.urls)),
         url(r'^api-auth/', include('rest_framework.urls', namespace='rest_framework'))
@@ -173,12 +174,14 @@ The API guide is your complete reference manual to all the functionality provide
 * [Serializers][serializers]
 * [Serializer fields][fields]
 * [Serializer relations][relations]
+* [Validators][validators]
 * [Authentication][authentication]
 * [Permissions][permissions]
 * [Throttling][throttling]
 * [Filtering][filtering]
 * [Pagination][pagination]
 * [Content negotiation][contentnegotiation]
+* [Metadata][metadata]
 * [Format suffixes][formatsuffixes]
 * [Returning URLs][reverse]
 * [Exceptions][exceptions]
@@ -197,10 +200,12 @@ General guides to using REST framework.
 * [REST, Hypermedia & HATEOAS][rest-hypermedia-hateoas]
 * [Third Party Resources][third-party-resources]
 * [Contributing to REST framework][contributing]
+* [Project management][project-management]
 * [2.0 Announcement][rest-framework-2-announcement]
 * [2.2 Announcement][2.2-announcement]
 * [2.3 Announcement][2.3-announcement]
 * [2.4 Announcement][2.4-announcement]
+* [3.0 Announcement][3.0-announcement]
 * [Kickstarter Announcement][kickstarter-announcement]
 * [Release Notes][release-notes]
 * [Credits][credits]
@@ -294,12 +299,14 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 [serializers]: api-guide/serializers.md
 [fields]: api-guide/fields.md
 [relations]: api-guide/relations.md
+[validators]: api-guide/validators.md
 [authentication]: api-guide/authentication.md
 [permissions]: api-guide/permissions.md
 [throttling]: api-guide/throttling.md
 [filtering]: api-guide/filtering.md
 [pagination]: api-guide/pagination.md
 [contentnegotiation]: api-guide/content-negotiation.md
+[metadata]: api-guide/metadata.md
 [formatsuffixes]: api-guide/format-suffixes.md
 [reverse]: api-guide/reverse.md
 [exceptions]: api-guide/exceptions.md
@@ -313,11 +320,13 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 [browsableapi]: topics/browsable-api.md
 [rest-hypermedia-hateoas]: topics/rest-hypermedia-hateoas.md
 [contributing]: topics/contributing.md
+[project-management]: topics/project-management.md
 [third-party-resources]: topics/third-party-resources.md
 [rest-framework-2-announcement]: topics/rest-framework-2-announcement.md
 [2.2-announcement]: topics/2.2-announcement.md
 [2.3-announcement]: topics/2.3-announcement.md
 [2.4-announcement]: topics/2.4-announcement.md
+[3.0-announcement]: topics/3.0-announcement.md
 [kickstarter-announcement]: topics/kickstarter-announcement.md
 [release-notes]: topics/release-notes.md
 [credits]: topics/credits.md

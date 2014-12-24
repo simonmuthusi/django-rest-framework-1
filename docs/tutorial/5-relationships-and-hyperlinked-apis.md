@@ -6,7 +6,6 @@ At the moment relationships within our API are represented by using primary keys
 
 Right now we have endpoints for 'snippets' and 'users', but we don't have a single entry point to our API.  To create one, we'll use a regular function-based view and the `@api_view` decorator we introduced earlier. In your `snippets/views.py` add:
 
-    from rest_framework import renderers
     from rest_framework.decorators import api_view
     from rest_framework.response import Response
     from rest_framework.reverse import reverse
@@ -45,7 +44,7 @@ Instead of using a concrete generic view, we'll use the base class for represent
 As usual we need to add the new views that we've created in to our URLconf.
 We'll add a url pattern for our new API root in `snippets/urls.py`:
 
-    url(r'^$', 'api_root'),
+    url(r'^$', views.api_root),
 
 And then add a url pattern for the snippet highlights:
 
@@ -76,7 +75,7 @@ The `HyperlinkedModelSerializer` has the following differences from `ModelSerial
 We can easily re-write our existing serializers to use hyperlinking. In your `snippets/serializers.py` add:
 
     class SnippetSerializer(serializers.HyperlinkedModelSerializer):
-        owner = serializers.Field(source='owner.username')
+        owner = serializers.ReadOnlyField(source='owner.username')
         highlight = serializers.HyperlinkedIdentityField(view_name='snippet-highlight', format='html')
 
         class Meta:
@@ -86,7 +85,7 @@ We can easily re-write our existing serializers to use hyperlinking. In your `sn
 
 
     class UserSerializer(serializers.HyperlinkedModelSerializer):
-        snippets = serializers.HyperlinkedRelatedField(many=True, view_name='snippet-detail')
+        snippets = serializers.HyperlinkedRelatedField(many=True, view_name='snippet-detail', read_only=True)
 
         class Meta:
             model = User

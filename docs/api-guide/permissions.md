@@ -1,4 +1,4 @@
-<a class="github" href="permissions.py"></a>
+source: permissions.py
 
 # Permissions
 
@@ -10,12 +10,24 @@ Together with [authentication] and [throttling], permissions determine whether a
 
 Permission checks are always run at the very start of the view, before any other code is allowed to proceed.  Permission checks will typically use the authentication information in the `request.user` and `request.auth` properties to determine if the incoming request should be permitted.
 
+Permissions are used to grant or deny access different classes of users to different parts of the API.
+
+The simplest style of permission would be to allow access to any authenticated user, and deny access to any unauthenticated user. This corresponds the `IsAuthenticated` class in REST framework.
+
+A slightly less strict style of permission would be to allow full access to authenticated users, but allow read-only access to unauthenticated users. This corresponds to the `IsAuthenticatedOrReadOnly` class in REST framework.
+
 ## How permissions are determined
 
-Permissions in REST framework are always defined as a list of permission classes.  
+Permissions in REST framework are always defined as a list of permission classes.
 
 Before running the main body of the view each permission in the list is checked.
-If any permission check fails an `exceptions.PermissionDenied` exception will be raised, and the main body of the view will not run.
+If any permission check fails an `exceptions.PermissionDenied` or `exceptions.NotAuthenticated` exception will be raised, and the main body of the view will not run.
+
+When the permissions checks fail either a "403 Forbidden" or a "401 Unauthorized" response will be returned, according to the following rules:
+
+* The request was successfully authenticated, but permission was denied. *&mdash; An HTTP 403 Forbidden response will be returned.*
+* The request was not successfully authenticated, and the highest priority authentication class *does not* use `WWW-Authenticate` headers. *&mdash; An HTTP 403 Forbidden response will be returned.*
+* The request was not successfully authenticated, and the highest priority authentication class *does* use `WWW-Authenticate` headers. *&mdash; An HTTP 401 Unauthorized response, with an appropriate `WWW-Authenticate` header will be returned.*
 
 ## Object level permissions
 
@@ -104,7 +116,7 @@ This permission is suitable if you want your API to only be accessible to regist
 
 The `IsAdminUser` permission class will deny permission to any user, unless `user.is_staff` is `True` in which case permission will be allowed.
 
-This permission is suitable is you want your API to only be accessible to a subset of trusted administrators.
+This permission is suitable if you want your API to only be accessible to a subset of trusted administrators.
 
 ## IsAuthenticatedOrReadOnly
 
@@ -146,7 +158,13 @@ As with `DjangoModelPermissions`, this permission must only be applied to views 
 
 Note that `DjangoObjectPermissions` **does not** require the `django-guardian` package, and should support other object-level backends equally well.
 
-As with `DjangoModelPermissions` you can use custom model permissions by overriding `DjangoModelPermissions` and setting the `.perms_map` property.  Refer to the source code for details.  Note that if you add a custom `view` permission for `GET`, `HEAD` and `OPTIONS` requests, you'll probably also want to consider adding the `DjangoObjectPermissionsFilter` class to ensure that list endpoints only return results including objects for which the user has appropriate view permissions.
+As with `DjangoModelPermissions` you can use custom model permissions by overriding `DjangoModelPermissions` and setting the `.perms_map` property.  Refer to the source code for details.
+
+---
+
+**Note**: If you need object level `view` permissions for `GET`, `HEAD` and `OPTIONS` requests, you'll want to consider also adding the `DjangoObjectPermissionsFilter` class to ensure that list endpoints only return results including objects for which the user has appropriate view permissions.
+
+---
 
 ## TokenHasReadWriteScope
 
@@ -183,11 +201,7 @@ If you need to test if a request is a read operation or a write operation, you s
 
 ---
 
-**Note**: In versions 2.0 and 2.1, the signature for the permission checks always included an optional `obj` parameter, like so: `.has_permission(self, request, view, obj=None)`.  The method would be called twice, first for the global permission checks, with no object supplied, and second for the object-level check when required.
-
-As of version 2.2 this signature has now been replaced with two separate method calls, which is more explicit and obvious.  The old style signature continues to work, but its use will result in a `PendingDeprecationWarning`, which is silent by default.  In 2.3 this will be escalated to a `DeprecationWarning`, and in 2.4 the old-style signature will be removed.
-
-For more details see the [2.2 release announcement][2.2-announcement].
+**Note**: The instance-level `has_object_permission` method will only be called if the view-level `has_permission` checks have already passed. Also note that in order for the instance-level checks to run, the view code should explicitly call `.check_object_permissions(request, obj)`. If you are using the generic views then this will be handled for you by default.
 
 ---
 
@@ -218,9 +232,9 @@ As well as global permissions, that are run against all incoming requests, you c
         def has_object_permission(self, request, view, obj):
             # Read permissions are allowed to any request,
             # so we'll always allow GET, HEAD or OPTIONS requests.
-            if request.method in permissions.SAFE_METHODS:            
+            if request.method in permissions.SAFE_METHODS:
                 return True
-    
+
             # Instance must have an attribute named `owner`.
             return obj.owner == request.user
 

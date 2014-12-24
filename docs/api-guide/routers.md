@@ -1,4 +1,4 @@
-<a class="github" href="routers.py"></a>
+source: routers.py
 
 # Routers
 
@@ -41,7 +41,7 @@ The example above would generate the following URL patterns:
 
 **Note**: The `base_name` argument is used to specify the initial part of the view name pattern.  In the example above, that's the `user` or `account` part.
 
-Typically you won't *need* to specify the `base-name` argument, but if you have a viewset where you've defined a custom `get_queryset` method, then the viewset may not have a `.queryset` attribute set.  If you try to register that viewset you'll see an error like this:
+Typically you won't *need* to specify the `base_name` argument, but if you have a viewset where you've defined a custom `get_queryset` method, then the viewset may not have a `.queryset` attribute set.  If you try to register that viewset you'll see an error like this:
 
     'base_name' argument not specified, and could not automatically determine the name from the viewset, as it does not have a '.queryset' attribute.
 
@@ -56,10 +56,10 @@ For example, given a method like this on the `UserViewSet` class:
 
     from myapp.permissions import IsAdminOrIsSelf
     from rest_framework.decorators import detail_route
-    
+
     class UserViewSet(ModelViewSet):
         ...
-        
+
         @detail_route(methods=['post'], permission_classes=[IsAdminOrIsSelf])
         def set_password(self, request, pk=None):
             ...
@@ -67,6 +67,24 @@ For example, given a method like this on the `UserViewSet` class:
 The following URL pattern would additionally be generated:
 
 * URL pattern: `^users/{pk}/set_password/$`  Name: `'user-set-password'`
+
+If you do not want to use the default URL generated for your custom action, you can instead use the url_path parameter to customize it.
+
+For example, if you want to change the URL for our custom action to `^users/{pk}/change-password/$`, you could write:
+
+    from myapp.permissions import IsAdminOrIsSelf
+    from rest_framework.decorators import detail_route
+    
+    class UserViewSet(ModelViewSet):
+        ...
+        
+        @detail_route(methods=['post'], permission_classes=[IsAdminOrIsSelf], url_path='change-password')
+        def set_password(self, request, pk=None):
+            ...
+
+The above example would now generate the following URL pattern:
+
+* URL pattern: `^users/{pk}/change-password/$`  Name: `'user-change-password'`
 
 For more information see the viewset documentation on [marking extra actions for routing][route-decorators].
 
@@ -228,7 +246,7 @@ For another example of setting the `.routes` attribute, see the source code for 
 
 ## Advanced custom routers
 
-If you want to provide totally custom behavior, you can override `BaseRouter` and override the `get_urls(self)` method.  The method should inspect the registered viewsets and return a list of URL patterns.  The registered prefix, viewset and basename tuples may be inspected by accessing the `self.registry` attribute.  
+If you want to provide totally custom behavior, you can override `BaseRouter` and override the `get_urls(self)` method.  The method should inspect the registered viewsets and return a list of URL patterns.  The registered prefix, viewset and basename tuples may be inspected by accessing the `self.registry` attribute.
 
 You may also want to override the `get_default_base_name(self, viewset)` method, or else always explicitly set the `base_name` argument when registering your viewsets with the router.
 

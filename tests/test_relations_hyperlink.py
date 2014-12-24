@@ -4,7 +4,6 @@ from django.test import TestCase
 from rest_framework import serializers
 from rest_framework.test import APIRequestFactory
 from tests.models import (
-    BlogPost,
     ManyToManyTarget, ManyToManySource, ForeignKeyTarget, ForeignKeySource,
     NullableForeignKeySource, OneToOneTarget, NullableOneToOneSource
 )
@@ -13,8 +12,7 @@ factory = APIRequestFactory()
 request = factory.get('/')  # Just to ensure we have a request in the serializer context
 
 
-def dummy_view(request, pk):
-    pass
+dummy_view = lambda request, pk: None
 
 urlpatterns = patterns(
     '',
@@ -91,7 +89,14 @@ class HyperlinkedManyToManyTests(TestCase):
             {'url': 'http://testserver/manytomanysource/2/', 'name': 'source-2', 'targets': ['http://testserver/manytomanytarget/1/', 'http://testserver/manytomanytarget/2/']},
             {'url': 'http://testserver/manytomanysource/3/', 'name': 'source-3', 'targets': ['http://testserver/manytomanytarget/1/', 'http://testserver/manytomanytarget/2/', 'http://testserver/manytomanytarget/3/']}
         ]
-        self.assertEqual(serializer.data, expected)
+        with self.assertNumQueries(4):
+            self.assertEqual(serializer.data, expected)
+
+    def test_many_to_many_retrieve_prefetch_related(self):
+        queryset = ManyToManySource.objects.all().prefetch_related('targets')
+        serializer = ManyToManySourceSerializer(queryset, many=True, context={'request': request})
+        with self.assertNumQueries(2):
+            serializer.data
 
     def test_reverse_many_to_many_retrieve(self):
         queryset = ManyToManyTarget.objects.all()
@@ -101,7 +106,8 @@ class HyperlinkedManyToManyTests(TestCase):
             {'url': 'http://testserver/manytomanytarget/2/', 'name': 'target-2', 'sources': ['http://testserver/manytomanysource/2/', 'http://testserver/manytomanysource/3/']},
             {'url': 'http://testserver/manytomanytarget/3/', 'name': 'target-3', 'sources': ['http://testserver/manytomanysource/3/']}
         ]
-        self.assertEqual(serializer.data, expected)
+        with self.assertNumQueries(4):
+            self.assertEqual(serializer.data, expected)
 
     def test_many_to_many_update(self):
         data = {'url': 'http://testserver/manytomanysource/1/', 'name': 'source-1', 'targets': ['http://testserver/manytomanytarget/1/', 'http://testserver/manytomanytarget/2/', 'http://testserver/manytomanytarget/3/']}
@@ -199,7 +205,8 @@ class HyperlinkedForeignKeyTests(TestCase):
             {'url': 'http://testserver/foreignkeysource/2/', 'name': 'source-2', 'target': 'http://testserver/foreignkeytarget/1/'},
             {'url': 'http://testserver/foreignkeysource/3/', 'name': 'source-3', 'target': 'http://testserver/foreignkeytarget/1/'}
         ]
-        self.assertEqual(serializer.data, expected)
+        with self.assertNumQueries(1):
+            self.assertEqual(serializer.data, expected)
 
     def test_reverse_foreign_key_retrieve(self):
         queryset = ForeignKeyTarget.objects.all()
@@ -208,15 +215,16 @@ class HyperlinkedForeignKeyTests(TestCase):
             {'url': 'http://testserver/foreignkeytarget/1/', 'name': 'target-1', 'sources': ['http://testserver/foreignkeysource/1/', 'http://testserver/foreignkeysource/2/', 'http://testserver/foreignkeysource/3/']},
             {'url': 'http://testserver/foreignkeytarget/2/', 'name': 'target-2', 'sources': []},
         ]
-        self.assertEqual(serializer.data, expected)
+        with self.assertNumQueries(3):
+            self.assertEqual(serializer.data, expected)
 
     def test_foreign_key_update(self):
         data = {'url': 'http://testserver/foreignkeysource/1/', 'name': 'source-1', 'target': 'http://testserver/foreignkeytarget/2/'}
         instance = ForeignKeySource.objects.get(pk=1)
         serializer = ForeignKeySourceSerializer(instance, data=data, context={'request': request})
         self.assertTrue(serializer.is_valid())
-        self.assertEqual(serializer.data, data)
         serializer.save()
+        self.assertEqual(serializer.data, data)
 
         # Ensure source 1 is updated, and everything else is as expected
         queryset = ForeignKeySource.objects.all()
@@ -233,7 +241,7 @@ class HyperlinkedForeignKeyTests(TestCase):
         instance = ForeignKeySource.objects.get(pk=1)
         serializer = ForeignKeySourceSerializer(instance, data=data, context={'request': request})
         self.assertFalse(serializer.is_valid())
-        self.assertEqual(serializer.errors, {'target': ['Incorrect type.  Expected url string, received int.']})
+        self.assertEqual(serializer.errors, {'target': ['Incorrect type. Expected URL string, received int.']})
 
     def test_reverse_foreign_key_update(self):
         data = {'url': 'http://testserver/foreignkeytarget/2/', 'name': 'target-2', 'sources': ['http://testserver/foreignkeysource/1/', 'http://testserver/foreignkeysource/3/']}
@@ -304,7 +312,7 @@ class HyperlinkedForeignKeyTests(TestCase):
         instance = ForeignKeySource.objects.get(pk=1)
         serializer = ForeignKeySourceSerializer(instance, data=data, context={'request': request})
         self.assertFalse(serializer.is_valid())
-        self.assertEqual(serializer.errors, {'target': ['This field is required.']})
+        self.assertEqual(serializer.errors, {'target': ['This field may not be null.']})
 
 
 class HyperlinkedNullableForeignKeyTests(TestCase):
@@ -377,8 +385,8 @@ class HyperlinkedNullableForeignKeyTests(TestCase):
         instance = NullableForeignKeySource.objects.get(pk=1)
         serializer = NullableForeignKeySourceSerializer(instance, data=data, context={'request': request})
         self.assertTrue(serializer.is_valid())
-        self.assertEqual(serializer.data, data)
         serializer.save()
+        self.assertEqual(serializer.data, data)
 
         # Ensure source 1 is updated, and everything else is as expected
         queryset = NullableForeignKeySource.objects.all()
@@ -400,8 +408,8 @@ class HyperlinkedNullableForeignKeyTests(TestCase):
         instance = NullableForeignKeySource.objects.get(pk=1)
         serializer = NullableForeignKeySourceSerializer(instance, data=data, context={'request': request})
         self.assertTrue(serializer.is_valid())
-        self.assertEqual(serializer.data, expected_data)
         serializer.save()
+        self.assertEqual(serializer.data, expected_data)
 
         # Ensure source 1 is updated, and everything else is as expected
         queryset = NullableForeignKeySource.objects.all()
@@ -412,27 +420,6 @@ class HyperlinkedNullableForeignKeyTests(TestCase):
             {'url': 'http://testserver/nullableforeignkeysource/3/', 'name': 'source-3', 'target': None},
         ]
         self.assertEqual(serializer.data, expected)
-
-    # reverse foreign keys MUST be read_only
-    # In the general case they do not provide .remove() or .clear()
-    # and cannot be arbitrarily set.
-
-    # def test_reverse_foreign_key_update(self):
-    #     data = {'id': 1, 'name': 'target-1', 'sources': [1]}
-    #     instance = ForeignKeyTarget.objects.get(pk=1)
-    #     serializer = ForeignKeyTargetSerializer(instance, data=data)
-    #     self.assertTrue(serializer.is_valid())
-    #     self.assertEqual(serializer.data, data)
-    #     serializer.save()
-
-    #     # Ensure target 1 is updated, and everything else is as expected
-    #     queryset = ForeignKeyTarget.objects.all()
-    #     serializer = ForeignKeyTargetSerializer(queryset, many=True)
-    #     expected = [
-    #         {'id': 1, 'name': 'target-1', 'sources': [1]},
-    #         {'id': 2, 'name': 'target-2', 'sources': []},
-    #     ]
-    #     self.assertEqual(serializer.data, expected)
 
 
 class HyperlinkedNullableOneToOneTests(TestCase):
@@ -454,72 +441,3 @@ class HyperlinkedNullableOneToOneTests(TestCase):
             {'url': 'http://testserver/onetoonetarget/2/', 'name': 'target-2', 'nullable_source': None},
         ]
         self.assertEqual(serializer.data, expected)
-
-
-# Regression tests for #694 (`source` attribute on related fields)
-
-class HyperlinkedRelatedFieldSourceTests(TestCase):
-    urls = 'tests.test_relations_hyperlink'
-
-    def test_related_manager_source(self):
-        """
-        Relational fields should be able to use manager-returning methods as their source.
-        """
-        BlogPost.objects.create(title='blah')
-        field = serializers.HyperlinkedRelatedField(
-            many=True,
-            source='get_blogposts_manager',
-            view_name='dummy-url',
-        )
-        field.context = {'request': request}
-
-        class ClassWithManagerMethod(object):
-            def get_blogposts_manager(self):
-                return BlogPost.objects
-
-        obj = ClassWithManagerMethod()
-        value = field.field_to_native(obj, 'field_name')
-        self.assertEqual(value, ['http://testserver/dummyurl/1/'])
-
-    def test_related_queryset_source(self):
-        """
-        Relational fields should be able to use queryset-returning methods as their source.
-        """
-        BlogPost.objects.create(title='blah')
-        field = serializers.HyperlinkedRelatedField(
-            many=True,
-            source='get_blogposts_queryset',
-            view_name='dummy-url',
-        )
-        field.context = {'request': request}
-
-        class ClassWithQuerysetMethod(object):
-            def get_blogposts_queryset(self):
-                return BlogPost.objects.all()
-
-        obj = ClassWithQuerysetMethod()
-        value = field.field_to_native(obj, 'field_name')
-        self.assertEqual(value, ['http://testserver/dummyurl/1/'])
-
-    def test_dotted_source(self):
-        """
-        Source argument should support dotted.source notation.
-        """
-        BlogPost.objects.create(title='blah')
-        field = serializers.HyperlinkedRelatedField(
-            many=True,
-            source='a.b.c',
-            view_name='dummy-url',
-        )
-        field.context = {'request': request}
-
-        class ClassWithQuerysetMethod(object):
-            a = {
-                'b': {
-                    'c': BlogPost.objects.all()
-                }
-            }
-
-        obj = ClassWithQuerysetMethod()
-        value = field.field_to_native(obj, 'field_name')
-        self.assertEqual(value, ['http://testserver/dummyurl/1/'])
