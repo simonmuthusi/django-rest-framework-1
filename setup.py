@@ -8,7 +8,8 @@ except ImportError:
 else:
     from setuptools import Extension
     ext_modules = cythonize(Extension('speedups', ['rest_framework/renderers.py',
-                                                   'rest_framework/__init__.py']))
+                                                   'rest_framework/__init__.py',
+                                                   'rest_framework/fields.py']))
 
 import re
 import os
