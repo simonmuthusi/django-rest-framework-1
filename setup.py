@@ -12,7 +12,8 @@ else:
                                                    'rest_framework/fields.py',
                                                    'rest_framework/mixins.py',
                                                    'rest_framework/generics.py',
-                                                   'rest_framework/views.py']))
+                                                   'rest_framework/views.py',
+                                                   'rest_framework/serializers.py']))
 
 import re
 import os
