@@ -17,7 +17,9 @@ else:
                                                    'rest_framework/pagination.py',
                                                    'rest_framework/parsers.py',
                                                    'rest_framework/negotiation.py',
-                                                   'rest_framework/viewsets.py']))
+                                                   'rest_framework/viewsets.py',
+                                                   'rest_framework/request.py',
+                                                   'rest_framework/response.py']))
 
 import re
 import os
