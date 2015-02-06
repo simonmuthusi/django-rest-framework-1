@@ -13,7 +13,8 @@ else:
                                                    'rest_framework/mixins.py',
                                                    'rest_framework/generics.py',
                                                    'rest_framework/views.py',
-                                                   'rest_framework/serializers.py']))
+                                                   'rest_framework/serializers.py',
+                                                   'rest_framework/pagination.py']))
 
 import re
 import os
