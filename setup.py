@@ -15,7 +15,8 @@ else:
                                                    'rest_framework/views.py',
                                                    'rest_framework/serializers.py',
                                                    'rest_framework/pagination.py',
-                                                   'rest_framework/parsers.py']))
+                                                   'rest_framework/parsers.py',
+                                                   'rest_framework/negotiation.py']))
 
 import re
 import os
