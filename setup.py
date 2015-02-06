@@ -20,7 +20,17 @@ else:
                                                    'rest_framework/viewsets.py',
                                                    'rest_framework/request.py',
                                                    'rest_framework/response.py',
-                                                   'rest_framework/utils/*.py']))
+                                                   'rest_framework/utils/__init__.py',
+                                                   'rest_framework/utils/breadcrumbs.py',
+                                                   'rest_framework/utils/encoders.py',
+                                                   'rest_framework/utils/field_mapping.py',
+                                                   'rest_framework/utils/formatting.py',
+                                                   'rest_framework/utils/html.py',
+                                                   'rest_framework/utils/humanize_datetime.py',
+                                                   'rest_framework/utils/mediatypes.py',
+                                                   'rest_framework/utils/model_meta.py',
+                                                   'rest_framework/utils/representation.py',
+                                                   'rest_framework/utils/serializer_helpers.py']))
 
 import re
 import os
