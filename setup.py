@@ -19,7 +19,8 @@ else:
                                                    'rest_framework/negotiation.py',
                                                    'rest_framework/viewsets.py',
                                                    'rest_framework/request.py',
-                                                   'rest_framework/response.py']))
+                                                   'rest_framework/response.py',
+                                                   'rest_framework/utils/*.py']))
 
 import re
 import os
