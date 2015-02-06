@@ -14,7 +14,8 @@ else:
                                                    'rest_framework/generics.py',
                                                    'rest_framework/views.py',
                                                    'rest_framework/serializers.py',
-                                                   'rest_framework/pagination.py']))
+                                                   'rest_framework/pagination.py',
+                                                   'rest_framework/parsers.py']))
 
 import re
 import os
