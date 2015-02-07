@@ -33,14 +33,17 @@ import warnings
 
 # Note: We do the following so that users of the framework can use this style:
 #
-#     example_field = serializers.CharField(...)
+# example_field = serializers.CharField(...)
 #
 # This helps keep the separation between model fields, form fields, and
 # serializer fields more explicit.
 
 from rest_framework.relations import *  # NOQA
-from rest_framework.fields import *  # NOQA
 
+try:
+    from rest_framework.speedups.fields import *  # NOQA
+except ImportError:
+    from rest_framework.fields import *  # NOQA
 
 # We assume that 'validators' are intended for the child serializer,
 # rather than the parent serializer.
