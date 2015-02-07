@@ -9,7 +9,7 @@ else:
     from setuptools import Extension
     ext_modules = cythonize(Extension('speedups', ['rest_framework/renderers.py',
                                                    'rest_framework/__init__.py',
-                                                   'rest_framework/fields.py',
+                                                   'rest_framework/speedups/fields.pyx',
                                                    'rest_framework/mixins.py',
                                                    'rest_framework/generics.py',
                                                    'rest_framework/views.py',
