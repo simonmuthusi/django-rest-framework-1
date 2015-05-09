@@ -1,11 +1,5 @@
 source: fields.py
 
----
-
-**Note**: This is the documentation for the **version 3.0** of REST framework. Documentation for [version 2.4](http://tomchristie.github.io/rest-framework-2-docs/) is also available.
-
----
-
 # Serializer fields
 
 > Each field in a Form class is responsible not only for validating data, but also for "cleaning" it &mdash; normalizing it to a consistent format.
@@ -138,11 +132,12 @@ A text representation. Optionally validates the text to be shorter than `max_len
 
 Corresponds to `django.db.models.fields.CharField` or `django.db.models.fields.TextField`.
 
-**Signature:** `CharField(max_length=None, min_length=None, allow_blank=False)`
+**Signature:** `CharField(max_length=None, min_length=None, allow_blank=False, trim_whitespace=True)`
 
 - `max_length` - Validates that the input contains no more than this number of characters.
 - `min_length` - Validates that the input contains no fewer than this number of characters.
 - `allow_blank` - If set to `True` then the empty string should be considered a valid value. If set to `False` then the empty string is considered invalid and will raise a validation error. Defaults to `False`.
+- `trim_whitespace` - If set to `True` then leading and trailing whitespace is trimmed. Defaults to `True`.
 
 The `allow_null` option is also available for string fields, although its usage is discouraged in favor of `allow_blank`. It is valid to set both `allow_blank=True` and `allow_null=True`, but doing so means that there will be two differing types of empty value permissible for string representations, which can lead to data inconsistencies and subtle application bugs.
 
@@ -439,7 +434,7 @@ A field class that does not take a value based on user input, but instead takes 
 
 For example, to include a field that always provides the current time as part of the serializer validated data, you would use the following:
 
-    modified = serializer.HiddenField(default=timezone.now)
+    modified = serializers.HiddenField(default=timezone.now)
 
 The `HiddenField` class is usually only needed if you have some validation that needs to run based on some pre-provided field values, but you do not want to expose all of those fields to the end user.
 
@@ -486,7 +481,7 @@ If you want to create a custom field, you'll need to subclass `Field` and then o
 
 The `.to_representation()` method is called to convert the initial datatype into a primitive, serializable datatype.
 
-The `to_internal_value()` method is called to restore a primitive datatype into its internal python representation. This method should raise a `serializer.ValidationError` if the data is invalid.
+The `to_internal_value()` method is called to restore a primitive datatype into its internal python representation. This method should raise a `serializers.ValidationError` if the data is invalid.
 
 Note that the `WritableField` class that was present in version 2.x no longer exists. You should subclass `Field` and override `to_internal_value()` if the field supports data input.
 
@@ -524,7 +519,7 @@ As an example, let's create a field that can be used represent the class name of
             # We pass the object instance onto `to_representation`,
             # not just the field attribute.
             return obj
- 
+
         def to_representation(self, obj):
             """
             Serialize the object's class name.
