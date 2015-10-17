@@ -23,13 +23,14 @@ from django.utils.dateparse import parse_date, parse_datetime, parse_time
 from django.utils.encoding import is_protected_type, smart_text
 from django.utils.functional import cached_property
 from django.utils.ipv6 import clean_ipv6_address
+from django.utils.lru_cache import lru_cache
 from django.utils.translation import ugettext_lazy as _
 
 from rest_framework import ISO_8601
 from rest_framework.compat import (
     MaxLengthValidator, MaxValueValidator, MinLengthValidator,
     MinValueValidator, duration_string, parse_duration, unicode_repr,
-    unicode_to_repr, lru_cache
+    unicode_to_repr
 )
 from rest_framework.exceptions import ValidationError
 from rest_framework.settings import api_settings
